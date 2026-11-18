@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F2328">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Jarvis</title>
+<style>
+:root{--bg:#ECEFF1;--surface:#fff;--ink:#1F2328;--muted:#66707B;--line:#D3D9DE;--accent:#2B59D6;--onaccent:#fff;--user:#1F2328;--onuser:#F4F6F7;--code:#E1E6EA;--err:#B3261E}
+@media (prefers-color-scheme:dark){:root{--bg:#15181B;--surface:#1E2226;--ink:#E6EAED;--muted:#8D97A1;--line:#2F353B;--accent:#6F93F5;--onaccent:#0E1320;--user:#2B59D6;--onuser:#fff;--code:#2A3036;--err:#F2B8B5}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+button,input,textarea{font:inherit;color:inherit}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+header h1{font:700 1.15rem/1 Georgia,serif;margin:0;letter-spacing:.01em}
+#status{flex:1;min-width:0;color:var(--muted);font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ghost{background:none;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:.85rem;cursor:pointer}
+#log{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
+.m{max-width:88%;overflow-wrap:anywhere;white-space:pre-wrap}
+.m.user{align-self:flex-end;background:var(--user);color:var(--onuser);padding:9px 13px;border-radius:16px 16px 4px 16px}
+.m.assistant{align-self:flex-start;font:1.02rem/1.6 Georgia,"Times New Roman",serif;border-left:3px solid var(--accent);padding-left:12px}
+.m.error{color:var(--err);font:.9rem/1.45 system-ui,sans-serif;border-left-color:var(--err)}
+code{background:var(--code);padding:1px 5px;border-radius:4px;font:.88em ui-monospace,Menlo,monospace}
+pre{background:var(--code);padding:10px 12px;border-radius:8px;overflow-x:auto;margin:8px 0;white-space:pre}
+pre code{padding:0;background:none}
+.empty{margin:auto;text-align:center;color:var(--muted);max-width:30ch}
+.empty b{display:block;color:var(--ink);font:700 1.3rem Georgia,serif;margin-bottom:6px}
+form{display:flex;gap:8px;align-items:flex-end;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line)}
+textarea{flex:1;resize:none;max-height:140px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 12px;outline:none}
+textarea:focus,input:focus{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:-1px}
+#go{background:var(--accent);color:var(--onaccent);border:0;border-radius:12px;padding:10px 16px;font-weight:600;cursor:pointer}
+dialog{width:min(92vw,460px);border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:18px}
+dialog::backdrop{background:#0008}
+dialog h2{margin:0 0 12px;font:700 1.1rem Georgia,serif}
+label{display:block;font-size:.85rem;color:var(--muted);margin:12px 0 4px}
+dialog input,dialog textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+dialog textarea{min-height:90px;max-height:none}
+.row{display:flex;gap:8px}.row input{flex:1}
+.hint{font-size:.78rem;color:var(--muted);margin:4px 0 0}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+@media (prefers-reduced-motion:reduce){#log{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Jarvis</h1>
+  <span id="status"></span>
+  <button class="ghost" id="new" type="button">Nouveau</button>
+  <button class="ghost" id="cfgBtn" type="button">Réglages</button>
+</header>
+<main id="log" aria-live="polite"></main>
+<form id="f">
+  <textarea id="in" rows="1" placeholder="Écris ton message" aria-label="Message"></textarea>
+  <button id="go" type="submit">Envoyer</button>
+</form>
+
+<dialog id="dlg">
+  <h2>Réglages du serveur</h2>
+  <label for="url">Adresse du serveur</label>
+  <input id="url" type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="https://mon-serveur/v1">
+  <p class="hint">Doit finir par /v1 (ex. http://localhost:8000/v1 pour jarvis serve, http://localhost:11434/v1 pour Ollama).</p>
+  <label for="key">Clé API (facultatif)</label>
+  <input id="key" type="password" autocomplete="off" autocapitalize="off">
+  <label for="model">Modèle</label>
+  <div class="row"><input id="model" list="models" autocapitalize="off" spellcheck="false"><button class="ghost" id="load" type="button">Charger</button></div>
+  <datalist id="models"></datalist>
+  <p class="hint" id="mhint"></p>
+  <label for="sys">Consigne système</label>
+  <textarea id="sys"></textarea>
+  <div class="actions">
+    <button class="ghost" id="close" type="button">Fermer</button>
+    <button id="save" type="button" style="background:var(--accent);color:var(--onaccent);border:0;border-radius:8px;padding:8px 14px;font-weight:600">Enregistrer</button>
+  </div>
+</dialog>
+
+<script>
+const $=s=>document.querySelector(s);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+let cfg=Object.assign({url:'http://localhost:8000/v1',key:'',model:'',system:'Tu es Jarvis, un assistant personnel. Réponds en français, de façon claire et concise.'},store.get('jarvis-cfg',{}));
+let msgs=store.get('jarvis-msgs',[]);
+let ctrl=null;
+const log=$('#log'),input=$('#in'),go=$('#go');
+
+const esc=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function md(t){
+  return t.split('```').map((p,i)=>{
+    if(i%2){const n=p.indexOf('\n');return '<pre><code>'+esc(n>=0?p.slice(n+1):p)+'</code></pre>'}
+    return esc(p).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
+  }).join('');
+}
+const base=()=>cfg.url.trim().replace(/\/+$/,'');
+const headers=()=>{const h={'Content-Type':'application/json'};if(cfg.key)h.Authorization='Bearer '+cfg.key;return h};
+const save=()=>store.set('jarvis-msgs',msgs);
+
+function status(){$('#status').textContent=cfg.model?cfg.model:'Aucun modèle choisi'}
+function draw(){
+  if(!msgs.length){
+    log.innerHTML='<div class="empty"><b>Prêt.</b>Pose une question. Si rien ne répond, vérifie l’adresse du serveur dans les réglages.</div>';return;
+  }
+  log.innerHTML=msgs.map((m,i)=>'<div class="m '+m.role+(m.error?' error':'')+'" data-i="'+i+'">'+(m.role==='user'?esc(m.content):md(m.content)+(m.error?(m.content?'\n\n':'')+esc(m.error):''))+'</div>').join('');
+  log.scrollTop=log.scrollHeight;
+}
+function paintLast(){
+  const el=log.lastElementChild,m=msgs[msgs.length-1];
+  if(!el||!m)return;
+  const stick=log.scrollHeight-log.scrollTop-log.clientHeight<80;
+  el.innerHTML=md(m.content);
+  if(stick)log.scrollTop=log.scrollHeight;
+}
+function busy(b){go.textContent=b?'Arrêter':'Envoyer'}
+function explain(e){
+  if(e instanceof TypeError)return 'Connexion impossible à '+base()+'. Causes possibles : serveur éteint, adresse incorrecte, CORS non autorisé côté serveur, ou serveur en http alors que cette page est en https (le navigateur bloque, sauf pour localhost).';
+  return e.message||String(e);
+}
+async function send(){
+  if(ctrl){ctrl.abort();return}
+  const text=input.value.trim();if(!text)return;
+  input.value='';fit();
+  msgs.push({role:'user',content:text});
+  const reply={role:'assistant',content:''};msgs.push(reply);
+  draw();busy(true);
+  ctrl=new AbortController();
+  try{
+    const body={stream:true,messages:[{role:'system',content:cfg.system},...msgs.filter(m=>m.content&&m!==reply).map(({role,content})=>({role,content}))]};
+    if(cfg.model)body.model=cfg.model;
+    const res=await fetch(base()+'/chat/completions',{method:'POST',signal:ctrl.signal,headers:headers(),body:JSON.stringify(body)});
+    if(!res.ok)throw new Error('Le serveur a répondu '+res.status+' : '+(await res.text()).slice(0,200));
+    const rd=res.body.getReader(),dec=new TextDecoder();let buf='';
+    for(;;){
+      const {done,value}=await rd.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let i;
+      while((i=buf.indexOf('\n'))>=0){
+        const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
+        if(!line.startsWith('data:'))continue;
+        const d=line.slice(5).trim();if(d==='[DONE]')continue;
+        try{const c=JSON.parse(d).choices?.[0]?.delta?.content;if(c){reply.content+=c;paintLast()}}catch{}
+      }
+    }
+  }catch(e){if(e.name!=='AbortError')reply.error=explain(e)}
+  finally{
+    ctrl=null;busy(false);
+    if(!reply.content&&!reply.error)msgs.pop();
+    save();draw();
+  }
+}
+function fit(){input.style.height='auto';input.style.height=Math.min(input.scrollHeight,140)+'px'}
+
+$('#f').addEventListener('submit',e=>{e.preventDefault();send()});
+input.addEventListener('input',fit);
+input.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();send()}});
+$('#new').addEventListener('click',()=>{if(ctrl)ctrl.abort();if(msgs.length&&!confirm('Effacer cette conversation ?'))return;msgs=[];save();draw()});
+
+const dlg=$('#dlg');
+function openCfg(){$('#url').value=cfg.url;$('#key').value=cfg.key;$('#model').value=cfg.model;$('#sys').value=cfg.system;$('#mhint').textContent='';dlg.showModal()}
+$('#cfgBtn').addEventListener('click',openCfg);
+$('#close').addEventListener('click',()=>dlg.close());
+$('#save').addEventListener('click',()=>{
+  cfg={url:$('#url').value.trim()||cfg.url,key:$('#key').value.trim(),model:$('#model').value.trim(),system:$('#sys').value.trim()};
+  store.set('jarvis-cfg',cfg);status();dlg.close();
+});
+$('#load').addEventListener('click',async()=>{
+  const h=$('#mhint'),u=$('#url').value.trim().replace(/\/+$/,''),k=$('#key').value.trim();
+  h.textContent='Chargement…';
+  try{
+    const r=await fetch(u+'/models',{headers:k?{Authorization:'Bearer '+k}:{}});
+    if(!r.ok)throw new Error('réponse '+r.status);
+    const ids=((await r.json()).data||[]).map(x=>x.id);
+    $('#models').innerHTML=ids.map(i=>'<option value="'+esc(i)+'">').join('');
+    h.textContent=ids.length?ids.length+' modèle(s) trouvé(s). Touche le champ pour choisir.':'Aucun modèle renvoyé par le serveur.';
+  }catch(e){h.textContent='Échec : '+explain(e)}
+});
+
+status();draw();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
